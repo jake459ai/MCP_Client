@@ -40,9 +40,9 @@ async def root():
     logger.info("Health check endpoint called")
     return {"message": "WebSocket server is running"}
 
-@app.websocket("/ws")  # Simplified WebSocket endpoint
+@app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    client_id = str(id(websocket))  # Use the websocket object's id as the client identifier
+    client_id = str(id(websocket))
     logger.info(f"New WebSocket connection request from client: {client_id}")
     logger.debug(f"Client headers: {websocket.headers}")
     
@@ -60,21 +60,55 @@ async def websocket_endpoint(websocket: WebSocket):
 
             # Send initial tools list
             logger.debug(f"Fetching tools list for {client_id}")
-            response = await mcp_client.session.list_tools()
+            tools_response = await mcp_client.session.list_tools()
             tools = [{
                 "name": tool.name,
                 "description": tool.description,
                 "inputSchema": tool.inputSchema
-            } for tool in response.tools]
+            } for tool in tools_response.tools]
+
+            # Fetch available prompts
+            logger.debug(f"Fetching prompts list for {client_id}")
+            try:
+                prompts_result = await mcp_client.session.list_prompts()
+                logger.debug(f"Raw prompts result: {prompts_result}")
+                
+                prompts_list = []
+                for prompt in prompts_result.prompts:
+                    try:
+                        # Get the name from the prompt
+                        prompt_name = getattr(prompt, 'name', str(prompt))
+                        logger.debug(f"Processing prompt: {prompt_name}")
+                        
+                        # Create basic prompt info for the list
+                        prompt_dict = {
+                            "name": prompt_name,
+                            "description": getattr(prompt, 'description', ''),
+                            "parameters": {}  # Parameters will be fetched when prompt is selected
+                        }
+                        prompts_list.append(prompt_dict)
+                    except Exception as e:
+                        logger.error(f"Error processing prompt {prompt}: {str(e)}")
+                        continue
+                        
+                logger.info(f"Found {len(prompts_list)} prompts")
+                logger.debug(f"Final prompts list: {prompts_list}")
+            except Exception as e:
+                logger.warning(f"Failed to fetch prompts: {str(e)}")
+                prompts_list = []
+
+            # Send initial data
             await websocket.send_json({
-                "type": "tools",
-                "data": tools
+                "type": "initialization",
+                "data": {
+                    "tools": tools,
+                    "prompts": prompts_list
+                }
             })
-            logger.info(f"Sent tools list to client: {client_id}")
+            logger.info(f"Sent initialization data to client: {client_id}")
 
             while True:
                 try:
-                    # Check if the connection is still alive
                     if websocket.client_state == WebSocketState.DISCONNECTED:
                         logger.warning(f"Client disconnected: {client_id}")
                         break
@@ -94,6 +128,55 @@ async def websocket_endpoint(websocket: WebSocket):
                             "data": response
                         })
                         logger.info(f"Sent query response to {client_id}")
+                    elif message["type"] == "get_prompt":
+                        # Get prompt details
+                        prompt_name = message['name']
+                        logger.debug(f"Fetching prompt {prompt_name} for {client_id}")
+                        try:
+                            # First get the prompt structure to get the parameters
+                            prompts_result = await mcp_client.session.list_prompts()
+                            selected_prompt = None
+                            for prompt in prompts_result.prompts:
+                                if getattr(prompt, 'name', str(prompt)) == prompt_name:
+                                    selected_prompt = prompt
+                                    break
+                            
+                            if not selected_prompt:
+                                raise ValueError(f"Prompt {prompt_name} not found")
+                            
+                            # Extract parameters from the prompt arguments
+                            parameters = {}
+                            if hasattr(selected_prompt, 'arguments'):
+                                for arg in selected_prompt.arguments:
+                                    parameters[arg.name] = {
+                                        "type": "string",
+                                        "description": arg.description,
+                                        "required": arg.required
+                                    }
+                            
+                            # Create prompt details without trying to get content yet
+                            prompt_details = {
+                                "name": prompt_name,
+                                "description": getattr(selected_prompt, 'description', ''),
+                                "content": "Please provide the required parameters: " + 
+                                         ", ".join(parameters.keys()),
+                                "parameters": parameters
+                            }
+                            
+                            logger.debug(f"Sending prompt details to frontend: {prompt_details}")
+                            await websocket.send_json({
+                                "type": "prompt",
+                                "data": prompt_details
+                            })
+                            logger.info(f"Sent prompt details to {client_id}")
+                        except Exception as e:
+                            error_msg = f"Error fetching prompt: {str(e)}"
+                            logger.error(error_msg, exc_info=True)
+                            if websocket.client_state != WebSocketState.DISCONNECTED:
+                                await websocket.send_json({
+                                    "type": "error",
+                                    "data": error_msg
+                                })
                     elif message["type"] == "clear":
                         # Clear conversation history
                         logger.debug(f"Clearing conversation history for {client_id}")
@@ -120,6 +203,7 @@ async def websocket_endpoint(websocket: WebSocket):
                             "filename": message["filename"]
                         })
                         logger.info(f"Loaded conversation for {client_id}")
+
                 except json.JSONDecodeError as e:
                     logger.error(f"Invalid JSON from client {client_id}: {str(e)}")
                     await websocket.send_json({

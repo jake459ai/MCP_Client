@@ -109,16 +109,27 @@ Remember: You have real-time access to the tools' latest descriptions and schema
         print(f"\nStarting server with command: {command} {' '.join(server_config['args'])}")
         
         try:
+            # Use the high-level SDK interface with proper context managers
             stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
             self.stdio, self.write = stdio_transport
             self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
-
+            
+            # Initialize the session
             await self.session.initialize()
-
+            
             # List available tools
-            response = await self.session.list_tools()
-            tools = response.tools
-            print(f"\nConnected to server '{server_name}' with tools:", [tool.name for tool in tools])
+            tools_response = await self.session.list_tools()
+            print(f"\nConnected to server '{server_name}' with tools:", [tool.name for tool in tools_response.tools])
+            
+            # Try to list available prompts
+            try:
+                prompts_result = await self.session.list_prompts()
+                # Access the prompts attribute of the result
+                prompts = prompts_result.prompts if hasattr(prompts_result, 'prompts') else []
+                print(f"Available prompts: {[getattr(prompt, 'name', str(prompt)) for prompt in prompts]}")
+            except Exception as e:
+                print(f"Server does not support prompts: {str(e)}")
+                
         except FileNotFoundError as e:
             raise FileNotFoundError(f"Could not find the '{command}' executable. Please ensure uv is installed and in your PATH. Common install locations: {', '.join(uv_paths)}") from e
         except Exception as e:
@@ -142,16 +153,26 @@ Remember: You have real-time access to the tools' latest descriptions and schema
             env=None
         )
 
+        # Use the high-level SDK interface with proper context managers
         stdio_transport = await self.exit_stack.enter_async_context(stdio_client(server_params))
         self.stdio, self.write = stdio_transport
         self.session = await self.exit_stack.enter_async_context(ClientSession(self.stdio, self.write))
-
+        
+        # Initialize the session
         await self.session.initialize()
-
+        
         # List available tools
-        response = await self.session.list_tools()
-        tools = response.tools
-        print("\nConnected to server with tools:", [tool.name for tool in tools])
+        tools_response = await self.session.list_tools()
+        print("\nConnected to server with tools:", [tool.name for tool in tools_response.tools])
+        
+        # Try to list available prompts
+        try:
+            prompts_result = await self.session.list_prompts()
+            # Access the prompts attribute of the result
+            prompts = prompts_result.prompts if hasattr(prompts_result, 'prompts') else []
+            print(f"Available prompts: {[getattr(prompt, 'name', str(prompt)) for prompt in prompts]}")
+        except Exception as e:
+            print(f"Server does not support prompts: {str(e)}")
 
     async def process_query(self, query: str) -> str:
         """Process a query using Claude and available tools"""
@@ -189,7 +210,6 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                 response = self.anthropic.messages.create(
                     model="claude-3-5-sonnet-20241022",
                     max_tokens=1000,
-                    system=self.system_prompt,
                     messages=self.conversation_history,
                     tools=available_tools
                 )
@@ -197,7 +217,7 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                 error_msg = f"Error calling Claude API: {str(e)}"
                 self.conversation_history.append({
                     "role": "assistant",
-                    "content": [{"type": "text", "text": error_msg}]
+                    "content": error_msg
                 })
                 return error_msg
 
@@ -210,12 +230,12 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                     # Only add text if it's not just a transitional message
                     if not (content.text.strip().lower().startswith(("let me", "i'll", "i will", "now i'll", "next i'll"))):
                         final_text.append(content.text)
-                    assistant_message_content.append(content)
+                    assistant_message_content.append({"type": "text", "text": content.text})
                 elif content.type == 'tool_use':
                     has_tool_calls = True
                     tool_name = content.name
                     tool_args = content.input
-
+                    
                     # Add a step marker for tool calls
                     final_text.append(f"\nStep {step_count}: Using {tool_name}")
                     step_count += 1
@@ -234,6 +254,7 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                                 print(f"\nRetrying tool call (attempt {attempt + 2}/{MAX_RETRIES})...")
                                 await asyncio.sleep(RETRY_DELAY)
 
+                    # Add tool call to message content
                     assistant_message_content.append(content)
                     
                     # Add assistant's tool use to conversation history
@@ -259,10 +280,11 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                 break
 
         # Add final assistant response to conversation history
-        self.conversation_history.append({
-            "role": "assistant",
-            "content": response.content
-        })
+        if not has_tool_calls:
+            self.conversation_history.append({
+                "role": "assistant",
+                "content": response.content
+            })
 
         # Format the final output
         formatted_output = []

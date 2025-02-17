@@ -1,7 +1,6 @@
 .app-container {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  grid-template-rows: auto 1fr;
+  display: flex;
+  flex-direction: column;
   height: 100vh;
   max-width: 1400px;
   margin: 0 auto;
@@ -10,7 +9,6 @@
 }
 
 header {
-  grid-column: 1 / -1;
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -33,13 +31,21 @@ header {
   color: #f44336;
 }
 
+.main-content {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 20px;
+  flex: 1;
+  min-height: 0; /* Important for nested scrolling */
+}
+
 .chat-container {
   display: flex;
   flex-direction: column;
-  height: 100%;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  min-height: 0; /* Important for nested scrolling */
 }
 
 .messages {
@@ -123,12 +129,19 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.tools-panel {
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.prompts-panel, .tools-panel {
   background: #fff;
   padding: 20px;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  overflow-y: auto;
 }
 
 .tool {
@@ -183,4 +196,165 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
+}
+
+.prompt {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+  outline: none;
+}
+
+.prompt:hover, .prompt:focus {
+  background: #e0e0e0;
+  border-color: #007aff;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.prompt:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.prompt h3 {
+  margin: 0 0 8px 0;
+  color: #007aff;
+}
+
+.prompt p {
+  margin: 0;
+  font-size: 14px;
+  color: #666;
+}
+
+.prompt-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.prompt-modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.prompt-modal h2 {
+  margin: 0 0 16px 0;
+  color: #007aff;
+}
+
+.prompt-modal p {
+  margin: 0 0 24px 0;
+  color: #666;
+}
+
+.prompt-parameter {
+  margin-bottom: 16px;
+}
+
+.prompt-parameter label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #333;
+}
+
+.prompt-parameter input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 16px;
+}
+
+.prompt-parameter input:focus {
+  outline: none;
+  border-color: #007aff;
+}
+
+.prompt-parameter label .required {
+  color: #f44336;
+  margin-left: 4px;
+}
+
+.prompt-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+}
+
+.prompt-modal-actions button {
+  padding: 12px 24px;
+  border-radius: 6px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.prompt-modal-actions button[type="button"] {
+  background: #f5f5f5;
+  color: #333;
+  border: none;
+}
+
+.prompt-modal-actions button[type="button"]:hover {
+  background: #e0e0e0;
+}
+
+.prompt-modal-actions button[type="submit"] {
+  background: #007aff;
+  color: white;
+  border: none;
+}
+
+.prompt-modal-actions button[type="submit"]:hover {
+  background: #0056b3;
+}
+
+.prompt-modal-actions button[type="submit"]:disabled {
+  background: #cccccc;
+  cursor: not-allowed;
+}
+
+.prompt-modal-actions button[type="submit"]:disabled:hover {
+  background: #cccccc;
+}
+
+.prompt-parameter input:invalid {
+  border-color: #f44336;
+}
+
+.prompt-parameter input:focus:invalid {
+  outline-color: #f44336;
+}
+
+.no-prompts-message {
+  padding: 16px;
+  background: #f5f5f5;
+  border-radius: 8px;
+  text-align: center;
+  color: #666;
+}
+
+.no-prompts-message p {
+  margin: 0;
+  font-size: 14px;
 } 

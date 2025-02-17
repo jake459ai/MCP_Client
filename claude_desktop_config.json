@@ -14,6 +14,16 @@
         "UMAMI_PASSWORD": "t$X#jSkGbnLfh6Jn3", 
         "UMAMI_TEAM_ID": "2d4f0534-eb9e-4bc0-8b9d-d9ee2d16c9a7"
       }
+    },
+    "brave-search": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-brave-search"
+      ],
+      "env": {
+        "BRAVE_API_KEY": "YOUR_API_KEY_HERE"
+      }
     }
     }
   } 
