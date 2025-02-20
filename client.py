@@ -23,8 +23,14 @@ class MCPClient:
         self.config: Optional[Dict] = None
         self.conversation_history: list = []  # Store conversation history
         
+        # Get current date and time
+        current_datetime = datetime.datetime.now()
+        formatted_date = current_datetime.strftime("%Y-%m-%d %H:%M:%S")
+        
         # System prompt to guide Claude's behavior
-        self.system_prompt = """You are a sophisticated AI assistant with access to MCP (Model Context Protocol) servers that provide you with powerful tools to help users.
+        self.system_prompt = f"""You are a sophisticated AI assistant with access to MCP (Model Context Protocol) servers that provide you with powerful tools to help users.
+
+The current date and time is: {formatted_date}
 
 Key responsibilities:
 1. Tool Usage:
@@ -51,7 +57,9 @@ Key responsibilities:
    - Suggest optimal ways to use tools for complex tasks
    - Alert users to any required setup or prerequisites
 
-Remember: You have real-time access to the tools' latest descriptions and schemas. Always check these before making tool calls to ensure accuracy and optimal usage."""
+Remember: You have real-time access to the tools' latest descriptions and schemas. Always check these before making tool calls to ensure accuracy and optimal usage.
+NEVER ASSUME YOU KNOW THE DATE OR OTHER REAL TIME INFORMATION. ALWAYS USE THE PROVIDED CURRENT DATE: {formatted_date} AS YOUR REFERENCE POINT.
+Also when users ask about a website, always assume they are referring to the website's name, not ID, unless they specifically give you the ID"""
 
     async def connect_to_server(self, path: str):
         """Connect to an MCP server
@@ -208,8 +216,8 @@ Remember: You have real-time access to the tools' latest descriptions and schema
             try:
                 # Get Claude's next action
                 response = self.anthropic.messages.create(
-                    model="claude-3-5-sonnet-20241022",
-                    max_tokens=1000,
+                    model="claude-3-5-sonnet-latest",
+                    max_tokens=2000,
                     messages=self.conversation_history,
                     tools=available_tools
                 )
@@ -262,15 +270,30 @@ Remember: You have real-time access to the tools' latest descriptions and schema
                         "role": "assistant",
                         "content": assistant_message_content
                     })
+
+                    # Debug logging for tool result
+                    print("\nDEBUG - Raw tool result:")
+                    try:
+                        # Handle TextContent objects by extracting their text
+                        if hasattr(result.content, 'text'):
+                            result_content = result.content.text
+                        elif isinstance(result.content, list) and all(hasattr(item, 'text') for item in result.content):
+                            result_content = "\n".join(item.text for item in result.content)
+                        else:
+                            result_content = str(result.content)
+                        print(json.dumps(result_content, indent=2))
+                    except Exception as e:
+                        print(f"Debug logging failed: {str(e)}")
+                    print("\nDEBUG - Tool result type:", type(result.content))
                     
-                    # Add tool result to conversation history
+                    # Add tool result to conversation history with proper text extraction
                     self.conversation_history.append({
                         "role": "user",
                         "content": [
                             {
                                 "type": "tool_result",
                                 "tool_use_id": content.id,
-                                "content": result.content
+                                "content": result_content  # Now just passing the string directly
                             }
                         ]
                     })
